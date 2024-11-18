@@ -20,11 +20,23 @@ on:
 jobs:
   lints:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      
       - uses: DeterminateSystems/nix-installer-action@main
+      
       - uses: DeterminateSystems/magic-nix-cache-action@main
+      
       - uses: DeterminateSystems/flake-checker-action@main
-      - name: Run `nix build`
-        run: nix build --max-jobs auto --build-max-jobs auto --print-build-logs
+      
+      - name: Install Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: baalajimaestro
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+          
+      - name: Build and push to Cachix
+        run: |
+          nix build --max-jobs auto --build-max-jobs auto --print-build-logs
+          nix path-info --all | cachix push baalajimaestro
