@@ -23,19 +23,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      
-      - uses: DeterminateSystems/nix-installer-action@main
-      
-      - uses: DeterminateSystems/magic-nix-cache-action@main
-      
-      - uses: DeterminateSystems/flake-checker-action@main
-      
+      - uses: cachix/install-nix-action@v30
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
       - name: Install Cachix
         uses: cachix/cachix-action@v15
         with:
           name: baalajimaestro
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-          
-      - name: Build and push to Cachix
-        run: |
-          nix build | cachix push baalajimaestro
+      - run: nix build --json | jq -r '.[].outputs | to_entries[].value' | cachix push baalajimaestro
