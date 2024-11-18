@@ -38,4 +38,4 @@ jobs:
           
       - name: Build and push to Cachix
         run: |
-          nix build --max-jobs auto --build-max-jobs auto --print-build-logs | cachix push baalajimaestro
+          nix build | cachix push baalajimaestro
