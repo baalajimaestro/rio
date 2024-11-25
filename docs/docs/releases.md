@@ -8,7 +8,19 @@ language: 'en'
 <!-- - Fix: MacOS Delete key doesn't work in kitty mode [#513](https://github.com/raphamorim/rio/issues/513). -->
 <!-- - Fix: Kitty keyboard protocol doesn't work with tmux [#599](https://github.com/raphamorim/rio/issues/599). -->
 
-## 0.2.1 (unreleased)
+## 0.2.3 (unreleased)
+
+- Add `ToggleFullscreen` to configurable actions.
+
+## 0.2.2
+
+- Fix iterm2 image protocol.
+- Allow setting initial window title [#806](https://github.com/raphamorim/rio/pull/806) by [@xsadia](https://github.com/xsadia).
+- Fix runtime error after changing to a specific retroarch shader on windows [#788](https://github.com/raphamorim/rio/issues/788) by [@chyyran](https://github.com/chyyran).
+- Makes editor.args and shell.args optional in config.toml [#801](https://github.com/raphamorim/rio/pull/803) by [@Nylme](https://github.com/Nylme).
+- Introduce `navigation.open-config-with-split`.
+
+## 0.2.1
 
 - Fix: Search seems broken in 0.2.0 [#785](https://github.com/raphamorim/rio/issues/785).
 - Regular font is now 400 as default weight.

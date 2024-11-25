@@ -33,6 +33,16 @@ const MENTIONS = [
     ),
   },
   {
+    url: 'https://x.com/pikuma/status/1859327979869909260',
+    username: 'pikuma.com',
+    source: '/rio/assets/mentions/pikuma.jpg',
+    quote: (
+      <>
+        I've been using #Rio terminal by @raphamorims this week and it's super nice. Very easy to use and config.
+      </>
+    ),
+  },
+  {
     url: 'https://twitter.com/jaijams/status/1716815864975270005',
     username: '@jaijams',
     source: '/rio/assets/mentions/jaijams.jpg',
@@ -142,6 +152,16 @@ const MENTIONS = [
       </>
     ),
   },
+  {
+    url: 'https://x.com/pedronauck',
+    username: '@pedronauck',
+    source: '/rio/assets/mentions/pedronauck.jpg',
+    quote: (
+      <>
+        Rapha is not only one of the most talented programmers I've ever met but also one of the best friends I've had in my life. It’s no surprise to me that Rio embodies such exceptional quality and speed. As a terminal emulator, Rio has set a new standard—it’s unquestionably the go-to solution.
+      </>
+    ),
+  }
 ];
 
 export default MENTIONS;
