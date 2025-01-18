@@ -5,12 +5,60 @@ language: 'en'
 
 # Releases
 
-<!-- - Fix: MacOS Delete key doesn't work in kitty mode [#513](https://github.com/raphamorim/rio/issues/513). -->
-<!-- - Fix: Kitty keyboard protocol doesn't work with tmux [#599](https://github.com/raphamorim/rio/issues/599). -->
+## 0.2.5 (unreleased)
 
-## 0.2.3 (unreleased)
+- Shell integration.
+	- OSC 7 Escape sequences to advise the terminal of the working directory.
+	- OSC 133 Escape sequence to define Input, Output and Prompt zones.
+	- OSC 1337 Escape sequences to set user vars for tracking additional shell state.
 
+## 0.2.4
+
+- Breaking: Rio now doesn't allow anymore disable kitty keyboard protocol.
+- Fullwidth semantic escape characters.
+- Fix: report of Enter/Tab/Backspace in kitty keyboard.
+- Fix: use-kitty-keyboard-protocol = true doesn't work with tmux [#599](https://github.com/raphamorim/rio/issues/599).
+- Fix: use-kitty-keyboard-protocol breaks F[5-12] on macOS [#904](https://github.com/raphamorim/rio/issues/904).
+- Downgrade MSRV to 1.80.1
+- Update wgpu to 24.0.0.
+
+## 0.2.3
+
+- Rio now allows you to configure window title through configuration via template. Possible options:
+	- `TITLE`: terminal title via OSC sequences for setting terminal title
+	- `PROGRAM`: (e.g `fish`, `zsh`, `bash`, `vim`, etc...)
+	- `ABSOLUTE_PATH`: (e.g `/Users/rapha/Documents/a/rio`)
+	<!-- - `CANONICAL_PATH`: (e.g `.../Documents/a/rio`, `~/Documents/a`) -->
+	- `COLUMNS`: current columns
+	- `LINES`: current lines
+		- So, for example if you have: `{{COLUMNS}}x{{LINES}}` would show something like `88x66`.
+- Perf improvement on text selection [#898](https://github.com/raphamorim/rio/pull/898) by [@marc2332](https://github.com/marc2332).
+- Window title is now updated regardless the Navigation Mode.
+- Performance: Background and foreground data are only retrieved if is asked (either color automation is enabled or `window.title` contains any request for it).
+- Fixed: Nix build [#853](https://github.com/raphamorim/rio/pull/853).
+- Support to `window.macos-use-shadow` (enable or disable shadow on MacOS).
+- Support to `window.windows-corner-preference` (options: `Default`, `DoNotRound`,`Round` and `RoundSmall`).
+- Support to `window.windows-use-undecorated-shadow` (default is enabled).
+- Support to `window.windows-use-no-redirection-bitmap` (This sets `WS_EX_NOREDIRECTIONBITMAP`).
+- Minimal stable rust version 1.84.0.
+- Support for Unicode 16 characters.
+- Support to line height.
+- Renamed `--title` to `--title-placeholder` on CLI.
+- Fixed: Deb package name 'rio' conflicts with existing one in Ubuntu [#876](https://github.com/raphamorim/rio/issues/876).
+- Fixed: Unremovable bottom padding when using line-height [#449](https://github.com/raphamorim/rio/issues/449).
+- On macOS, fixed undocumented cursors (e.g. zoom, resize, help) always appearing to be invalid and falling back to the default cursor.
+- Introduce `SwitchCurrentTabToPrev` and `SwitchCurrentTabToNext` actions [#854](https://github.com/raphamorim/rio/pull/854/files) by [@agjini](https://github.com/agjini).
+- On X11, Wayland, Windows and macOS, improved scancode conversions for more obscure key codes.
+	- On macOS, fixed the scancode conversion for audio volume keys.
+	- On macOS, fixed the scancode conversion for `IntlBackslash`.
+- Kitty keyboard protocol is now enabled by default.
+- Allow `Renderer` to be configured cross-platform by `Platform` property.
 - Add `ToggleFullscreen` to configurable actions.
+- Escape sequence to move cursor forward tabs ( CSI Ps I ).
+- Always emit `1` for the first parameter when having modifiers in kitty keyboard protocol.
+- Microsoft Windows: fix the event loop not waking on accessibility requests.
+- Wayland: disable title text drawn with crossfont crate, use ab_glyph crate instead.
+- Sugarloaf: Expose wgpu.
 
 ## 0.2.2
 
@@ -294,7 +342,7 @@ args = ["-w"]
 - Fix key bindings when key is uppercased (`alt` or `shift` is inputted along).
 - Support to padding-y (ref: [#400](https://github.com/raphamorim/rio/issues/400))
 
-Define y axis padding based on a format `[top, left]`, default is `[0, 0]`.
+Define y axis padding based on a format `[top, bottom]`, default is `[0, 0]`.
 
 Example:
 

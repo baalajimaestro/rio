@@ -406,6 +406,7 @@ where
     pub window_id: WindowId,
     pub route_id: usize,
     title_stack: Vec<String>,
+    current_directory: Option<std::path::PathBuf>,
     hyperlink_re: regex::Regex,
 
     // The stack for the keyboard modes.
@@ -461,6 +462,7 @@ impl<U: EventListener> Crosswords<U> {
             window_id,
             route_id,
             title_stack: Default::default(),
+            current_directory: None,
             keyboard_mode_stack: Default::default(),
             inactive_keyboard_mode_stack: Default::default(),
         }
@@ -1594,11 +1596,16 @@ impl<U: EventListener> Handler for Crosswords<U> {
 
     #[inline]
     fn move_backward_tabs(&mut self, count: u16) {
-        self.damage_cursor();
+        trace!("Moving backward {} tabs", count);
 
         let old_col = self.grid.cursor.pos.col.0;
         for _ in 0..count {
             let mut col = self.grid.cursor.pos.col;
+
+            if col == 0 {
+                break;
+            }
+
             for i in (0..(col.0)).rev() {
                 if self.tabs[Column(i)] {
                     col = Column(i);
@@ -1882,6 +1889,9 @@ impl<U: EventListener> Handler for Crosswords<U> {
                     .flags
                     .insert(square::Flags::DASHED_UNDERLINE);
             }
+            Attr::BlinkSlow | Attr::BlinkFast | Attr::CancelBlink => {
+                info!("Term got unhandled attr: {:?}", attr);
+            }
             Attr::CancelUnderline => {
                 cursor.template.flags.remove(square::Flags::ALL_UNDERLINES)
             }
@@ -1889,14 +1899,19 @@ impl<U: EventListener> Handler for Crosswords<U> {
             Attr::CancelHidden => cursor.template.flags.remove(square::Flags::HIDDEN),
             Attr::Strike => cursor.template.flags.insert(square::Flags::STRIKEOUT),
             Attr::CancelStrike => cursor.template.flags.remove(square::Flags::STRIKEOUT),
-            _ => {
-                warn!("Term got unhandled attr: {:?}", attr);
-            }
+            // _ => {
+            // warn!("Term got unhandled attr: {:?}", attr);
+            // }
         }
     }
 
     fn set_title(&mut self, title: Option<String>) {
         self.title = title.unwrap_or_default();
+    }
+
+    fn set_current_directory(&mut self, path: std::path::PathBuf) {
+        trace!("Setting working directory {:?}", path);
+        self.current_directory = Some(path);
     }
 
     #[inline]
@@ -2377,7 +2392,29 @@ impl<U: EventListener> Handler for Crosswords<U> {
 
     #[inline]
     fn move_forward_tabs(&mut self, count: u16) {
-        trace!("[unimplemented] Moving forward {} tabs", count);
+        trace!("Moving forward {} tabs", count);
+        let num_cols = self.columns();
+        let old_col = self.grid.cursor.pos.col.0;
+        for _ in 0..count {
+            let mut col = self.grid.cursor.pos.col;
+
+            if col == num_cols - 1 {
+                break;
+            }
+
+            for i in col.0 + 1..num_cols {
+                col = Column(i);
+                if self.tabs[col] {
+                    break;
+                }
+            }
+
+            self.grid.cursor.pos.col = col;
+        }
+
+        let line = self.grid.cursor.pos.row.0 as usize;
+        self.damage
+            .damage_line(line, old_col, self.grid.cursor.pos.col.0);
     }
 
     #[inline]
@@ -2796,7 +2833,7 @@ impl<U: EventListener> Handler for Crosswords<U> {
         }
 
         if self.mode.contains(Mode::SIXEL_CURSOR_TO_THE_RIGHT) {
-            let graphic_columns = (graphic.width + cell_width - 1) / cell_width;
+            let graphic_columns = graphic.width.div_ceil(cell_width);
             self.move_forward(Column(graphic_columns));
         } else if scrolling {
             self.linefeed();

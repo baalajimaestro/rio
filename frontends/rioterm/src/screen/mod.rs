@@ -9,6 +9,7 @@
 pub mod hint;
 pub mod touch;
 
+use crate::bindings::kitty_keyboard::build_key_sequence;
 use crate::bindings::{
     Action as Act, BindingKey, BindingMode, FontSizeAction, MouseBinding, SearchAction,
     ViAction,
@@ -54,7 +55,6 @@ use rio_window::event::MouseButton;
 use rio_window::keyboard::ModifiersKeyState;
 use rio_window::keyboard::{Key, KeyLocation, ModifiersState, NamedKey};
 use rio_window::platform::modifier_supplement::KeyEventExtModifierSupplement;
-use std::borrow::Cow;
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::error::Error;
@@ -184,7 +184,6 @@ impl Screen<'_> {
             config.keyboard,
         );
 
-        let is_collapsed = config.navigation.is_collapsed_mode();
         let is_native = config.navigation.is_native();
 
         let (shell, working_dir) = process_open_url(
@@ -202,11 +201,11 @@ impl Screen<'_> {
             #[cfg(not(target_os = "windows"))]
             use_fork: config.use_fork,
             is_native,
-            // When navigation is collapsed and does not contain any color rule
-            // does not make sense fetch for foreground process names
-            should_update_titles: !(is_collapsed
-                && config.navigation.color_automation.is_empty()),
+            // When navigation does not contain any color rule
+            // does not make sense fetch for foreground process names/path
+            should_update_title_extra: !config.navigation.color_automation.is_empty(),
             split_color: config.colors.split,
+            title: config.title.clone(),
         };
 
         let rich_text_id = sugarloaf.create_rich_text();
@@ -374,6 +373,8 @@ impl Screen<'_> {
         self.renderer = Renderer::new(config, font_library);
 
         for context_grid in self.context_manager.contexts_mut() {
+            context_grid.update_line_height(config.line_height);
+
             context_grid.update_margin((
                 config.padding_x,
                 padding_y_top,
@@ -384,6 +385,11 @@ impl Screen<'_> {
 
             for current_context in context_grid.contexts_mut() {
                 let current_context = current_context.context_mut();
+                self.sugarloaf.set_rich_text_line_height(
+                    &current_context.rich_text_id,
+                    current_context.dimension.line_height,
+                );
+
                 let mut terminal = current_context.terminal.lock();
                 current_context.renderable_content =
                     RenderableContent::from_cursor_config(&config.cursor);
@@ -533,20 +539,14 @@ impl Screen<'_> {
 
     #[inline]
     pub fn process_key_event(&mut self, key: &rio_window::event::KeyEvent) {
-        // 1. In case there is a key released event and Rio is not using kitty keyboard protocol
-        // then should return drop the key processing
-        // 2. In case IME has preedit then also should drop the key processing
-        let is_kitty_keyboard_enabled = self.renderer.is_kitty_keyboard_enabled;
-        if !is_kitty_keyboard_enabled && key.state == ElementState::Released
-            || self.context_manager.current().ime.preedit().is_some()
-        {
+        if self.context_manager.current().ime.preedit().is_some() {
             return;
         }
 
         let mode = self.get_mode();
         let mods = self.modifiers.state();
 
-        if is_kitty_keyboard_enabled && key.state == ElementState::Released {
+        if key.state == ElementState::Released {
             if !mode.contains(Mode::REPORT_EVENT_TYPES)
                 || mode.contains(Mode::VI)
                 || self.search_active()
@@ -562,22 +562,15 @@ impl Screen<'_> {
                 mods & !ModifiersState::ALT
             };
 
-            let bytes: Cow<'static, [u8]> = match key.logical_key.as_ref() {
-                // NOTE: Echo the key back on release to follow kitty/foot behavior. When
-                // KEYBOARD_REPORT_ALL_KEYS_AS_ESC is used, we build proper escapes for
-                // the keys below.
-                _ if mode.contains(Mode::REPORT_ALL_KEYS_AS_ESC) => {
-                    crate::bindings::kitty_keyboard::build_key_sequence(key, mods, mode)
-                        .into()
+            let bytes = match key.logical_key.as_ref() {
+                Key::Named(NamedKey::Enter)
+                | Key::Named(NamedKey::Tab)
+                | Key::Named(NamedKey::Backspace)
+                    if !mode.contains(Mode::REPORT_ALL_KEYS_AS_ESC) =>
+                {
+                    return
                 }
-                // Winit uses different keys for `Backspace` so we explicitly specify the
-                // values, instead of using what was passed to us from it.
-                Key::Named(NamedKey::Tab) => [b'\t'].as_slice().into(),
-                Key::Named(NamedKey::Enter) => [b'\r'].as_slice().into(),
-                Key::Named(NamedKey::Backspace) => [b'\x7f'].as_slice().into(),
-                Key::Named(NamedKey::Escape) => [b'\x1b'].as_slice().into(),
-                _ => crate::bindings::kitty_keyboard::build_key_sequence(key, mods, mode)
-                    .into(),
+                _ => build_key_sequence(key, mods, mode),
             };
 
             self.ctx_mut().current_mut().messenger.send_write(bytes);
@@ -606,47 +599,18 @@ impl Screen<'_> {
             return;
         }
 
-        let bytes = if !is_kitty_keyboard_enabled {
-            // If text is empty then leave without input bytes
-            if text.is_empty() {
-                return;
-            }
+        let build_key_sequence = Self::should_build_sequence(&key, text, mode, mods);
 
+        let bytes = if build_key_sequence {
+            crate::bindings::kitty_keyboard::build_key_sequence(key, mods, mode)
+        } else {
             let mut bytes = Vec::with_capacity(text.len() + 1);
-            if self.alt_send_esc(key, text) && text.len() == 1 {
+            if mods.alt_key() {
                 bytes.push(b'\x1b');
             }
+
             bytes.extend_from_slice(text.as_bytes());
             bytes
-        } else {
-            // We use legacy input when we have associated text with
-            // the given key and we have one of the following situations:
-            //
-            // 1. No keyboard input protocol is enabled.
-            // 2. Mode is KEYBOARD_DISAMBIGUATE_ESC_CODES, but we have text + empty or Shift
-            //    modifiers and the location of the key is not on the numpad, and it's not an `Esc`.
-            let write_legacy = !mode.contains(Mode::REPORT_ALL_KEYS_AS_ESC)
-                && !text.is_empty()
-                && (!mode.contains(Mode::DISAMBIGUATE_ESC_CODES)
-                    || (mode.contains(Mode::DISAMBIGUATE_ESC_CODES)
-                        && (mods.is_empty() || mods == ModifiersState::SHIFT)
-                        && key.location != KeyLocation::Numpad
-                        // Special case escape here.
-                        && key.logical_key != Key::Named(NamedKey::Escape)));
-
-            // Handle legacy char writing.
-            if write_legacy {
-                let mut bytes = Vec::with_capacity(text.len() + 1);
-                if self.alt_send_esc(key, text) && text.len() == 1 {
-                    bytes.push(b'\x1b');
-                }
-
-                bytes.extend_from_slice(text.as_bytes());
-                bytes
-            } else {
-                // Otherwise we should build the key sequence for the given input.
-                crate::bindings::kitty_keyboard::build_key_sequence(key, mods, mode)
-            }
         };
 
         if !bytes.is_empty() {
@@ -654,6 +618,30 @@ impl Screen<'_> {
             self.clear_selection();
 
             self.ctx_mut().current_mut().messenger.send_bytes(bytes);
+        }
+    }
+
+    /// Check whether we should try to build escape sequence for the [`KeyEvent`].
+    fn should_build_sequence(
+        key: &rio_window::event::KeyEvent,
+        text: &str,
+        mode: Mode,
+        mods: ModifiersState,
+    ) -> bool {
+        if mode.contains(Mode::REPORT_ALL_KEYS_AS_ESC) {
+            return true;
+        }
+
+        let disambiguate = mode.contains(Mode::DISAMBIGUATE_ESC_CODES)
+            && (key.logical_key == Key::Named(NamedKey::Escape)
+                || (!mods.is_empty() && mods != ModifiersState::SHIFT)
+                || key.location == KeyLocation::Numpad);
+
+        match key.logical_key {
+            _ if disambiguate => true,
+            // Exclude all the named keys unless they have textual representation.
+            Key::Named(named) => named.to_text().is_none(),
+            _ => text.is_empty(),
         }
     }
 
@@ -1026,6 +1014,18 @@ impl Screen<'_> {
                         self.cancel_search();
                         self.clear_selection();
                         self.context_manager.switch_to_next();
+                        self.render();
+                    }
+                    Act::MoveCurrentTabToPrev => {
+                        self.cancel_search();
+                        self.clear_selection();
+                        self.context_manager.move_current_to_prev();
+                        self.render();
+                    }
+                    Act::MoveCurrentTabToNext => {
+                        self.cancel_search();
+                        self.clear_selection();
+                        self.context_manager.move_current_to_next();
                         self.render();
                     }
                     Act::SelectPrevTab => {

@@ -16,6 +16,16 @@ pub fn default_cursor_interval() -> u64 {
 }
 
 #[inline]
+pub fn default_title_placeholder() -> Option<String> {
+    Some(String::from("▲"))
+}
+
+#[inline]
+pub fn default_title_content() -> String {
+    String::from("{{ TITLE || PROGRAM }}")
+}
+
+#[inline]
 pub fn default_padding_y() -> [f32; 2] {
     [0., 0.]
 }
@@ -157,7 +167,7 @@ pub fn default_config_file_content() -> String {
 
 # Padding-y
 #
-# define y axis padding based on a format [top, left]
+# define y axis padding based on a format [top, bottom]
 # (default is [0, 0])
 #
 # Example:

@@ -5,7 +5,7 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import FeaturesSection from '@site/src/components/FeaturesSection/index';
 import MentionsSection from '@site/src/components/MentionsSection/index';
 import MediaSection from '@site/src/components/MediaSection/index';
-import RioLogo from '@site/static/assets/rio-logo.svg';
+import RioLogo from '@site/static/assets/rio-logo.png';
 import Heading from '@theme/Heading';
 import Layout from '@theme/Layout';
 import clsx from 'clsx';
@@ -30,10 +30,19 @@ function HomepageHeader() {
             <Translate>Install</Translate>
           </Link>
         </div>
+        <div className={styles.actionButtonSection}>
+        <iframe
+              className={styles.githubStarButton}
+              src="https://ghbtns.com/github-btn.html?user=raphamorim&amp;repo=rio&amp;type=star&amp;count=true&amp;size=large"
+              width={160}
+              height={30}
+              title="GitHub Stars"
+            />
+        </div>
       </div>
       <div className={styles.logoContainer}>
         <div className={styles.logoBackground} />
-        <RioLogo className={styles.logo} />
+        <img src={"assets/rio-logo.png"} className={styles.logo} />
       </div>
     </header>
   );

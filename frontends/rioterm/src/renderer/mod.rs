@@ -28,7 +28,6 @@ use unicode_width::UnicodeWidthChar;
 
 pub struct Renderer {
     is_vi_mode_enabled: bool,
-    pub is_kitty_keyboard_enabled: bool,
     pub named_colors: Colors,
     pub colors: List,
     pub navigation: ScreenNavigation,
@@ -83,7 +82,6 @@ impl Renderer {
             macos_use_unified_titlebar: config.window.macos_use_unified_titlebar,
             config_blinking_interval: config.cursor.blinking_interval.clamp(350, 1200),
             option_as_alt: config.option_as_alt.to_lowercase(),
-            is_kitty_keyboard_enabled: config.keyboard.use_kitty_keyboard_protocol,
             is_vi_mode_enabled: false,
             config_has_blinking_enabled: config.cursor.blinking,
             ignore_selection_fg_color: config.ignore_selection_fg_color,
@@ -276,13 +274,13 @@ impl Renderer {
                 };
                 style.background_color = Some(self.named_colors.selection_background);
             } else if search_hints.is_some()
-                && search_hints.as_mut().map_or(false, |search| {
-                    search.advance(Pos::new(line, Column(column)))
-                })
+                && search_hints
+                    .as_mut()
+                    .is_some_and(|search| search.advance(Pos::new(line, Column(column))))
             {
                 let is_focused = focused_match
                     .as_ref()
-                    .map_or(false, |fm| fm.contains(&Pos::new(line, Column(column))));
+                    .is_some_and(|fm| fm.contains(&Pos::new(line, Column(column))));
                 if is_focused {
                     style.color = self.named_colors.search_focused_match_foreground;
                     style.background_color =

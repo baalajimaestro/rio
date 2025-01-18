@@ -1,10 +1,14 @@
 pub mod grid;
 pub mod renderable;
+pub mod title;
 
 use crate::ansi::CursorShape;
 use crate::context::grid::ContextDimension;
 use crate::context::grid::ContextGrid;
 use crate::context::grid::Delta;
+use crate::context::title::{
+    create_title_extra_from_context, update_title, ContextManagerTitles,
+};
 use crate::event::sync::FairMutex;
 use crate::event::RioEvent;
 use crate::ime::Ime;
@@ -20,7 +24,6 @@ use rio_backend::event::WindowId;
 use rio_backend::selection::SelectionRange;
 use rio_backend::sugarloaf::{font::SugarloafFont, Object, SugarloafErrors};
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -127,45 +130,9 @@ pub struct ContextManagerConfig {
     pub spawn_performer: bool,
     pub use_current_path: bool,
     pub is_native: bool,
-    pub should_update_titles: bool,
+    pub should_update_title_extra: bool,
     pub split_color: [f32; 4],
-}
-
-pub struct ContextManagerTitles {
-    last_title_update: Option<Instant>,
-    pub titles: HashMap<usize, [String; 3]>,
-    pub key: String,
-}
-
-impl ContextManagerTitles {
-    pub fn new(
-        idx: usize,
-        program: String,
-        terminal_title: String,
-        path: String,
-    ) -> ContextManagerTitles {
-        ContextManagerTitles {
-            key: format!("{}{}{};", idx, program, terminal_title),
-            titles: HashMap::from([(idx, [program, terminal_title, path])]),
-            last_title_update: None,
-        }
-    }
-
-    #[inline]
-    pub fn set_key_val(
-        &mut self,
-        idx: usize,
-        program: String,
-        terminal_title: String,
-        path: String,
-    ) {
-        self.titles.insert(idx, [program, terminal_title, path]);
-    }
-
-    #[inline]
-    pub fn set_key(&mut self, key: String) {
-        self.key = key;
-    }
+    pub title: rio_backend::config::title::Title,
 }
 
 pub struct ContextManager<T: EventListener> {
@@ -181,7 +148,7 @@ pub struct ContextManager<T: EventListener> {
     pub titles: ContextManagerTitles,
 }
 
-pub fn create_mock_context<T: rio_backend::event::EventListener>(
+pub fn create_dead_context<T: rio_backend::event::EventListener>(
     event_proxy: T,
     window_id: WindowId,
     route_id: usize,
@@ -211,6 +178,42 @@ pub fn create_mock_context<T: rio_backend::event::EventListener>(
         dimension,
         ime: Ime::new(),
     }
+}
+
+#[cfg(test)]
+pub fn create_mock_context<
+    T: rio_backend::event::EventListener + Clone + std::marker::Send + 'static,
+>(
+    event_proxy: T,
+    window_id: WindowId,
+    route_id: usize,
+    rich_text_id: usize,
+    dimension: ContextDimension,
+) -> Context<T> {
+    let config = ContextManagerConfig {
+        #[cfg(not(target_os = "windows"))]
+        use_fork: true,
+        working_dir: None,
+        shell: Shell {
+            program: std::env::var("SHELL").unwrap_or("bash".to_string()),
+            args: vec![],
+        },
+        spawn_performer: false,
+        is_native: false,
+        should_update_title_extra: false,
+        use_current_path: false,
+        ..ContextManagerConfig::default()
+    };
+    ContextManager::create_context(
+        (&Cursor::default(), false),
+        event_proxy.clone(),
+        window_id,
+        route_id,
+        rich_text_id,
+        dimension,
+        &config,
+    )
+    .unwrap()
 }
 
 impl<T: EventListener + Clone + std::marker::Send + 'static> ContextManager<T> {
@@ -358,7 +361,7 @@ impl<T: EventListener + Clone + std::marker::Send + 'static> ContextManager<T> {
                     window_id,
                 );
 
-                create_mock_context(
+                create_dead_context(
                     event_proxy.clone(),
                     window_id,
                     route_id,
@@ -368,12 +371,7 @@ impl<T: EventListener + Clone + std::marker::Send + 'static> ContextManager<T> {
             }
         };
 
-        let titles = ContextManagerTitles::new(
-            0,
-            String::from("tab"),
-            String::new(),
-            ctx_config.working_dir.clone().unwrap_or_default(),
-        );
+        let titles = ContextManagerTitles::new(0, String::from("tab"), None);
 
         // Sugarloaf has found errors and context need to notify it for the user
         if let Some(errors) = sugarloaf_errors {
@@ -423,9 +421,9 @@ impl<T: EventListener + Clone + std::marker::Send + 'static> ContextManager<T> {
             },
             spawn_performer: false,
             is_native: false,
-            should_update_titles: false,
+            should_update_title_extra: false,
             use_current_path: false,
-            split_color: [0., 0., 0., 0.],
+            ..ContextManagerConfig::default()
         };
         let initial_context = ContextManager::create_context(
             (&Cursor::default(), false),
@@ -437,8 +435,7 @@ impl<T: EventListener + Clone + std::marker::Send + 'static> ContextManager<T> {
             &config,
         )?;
 
-        let titles =
-            ContextManagerTitles::new(0, String::new(), String::new(), String::new());
+        let titles = ContextManagerTitles::new(0, String::new(), None);
 
         Ok(ContextManager {
             current_index: 0,
@@ -508,9 +505,9 @@ impl<T: EventListener + Clone + std::marker::Send + 'static> ContextManager<T> {
     }
 
     #[inline]
-    pub fn schedule_render(&mut self, scheduled_time: u64) {
+    pub fn request_render(&mut self) {
         self.event_proxy
-            .send_event(RioEvent::PrepareRender(scheduled_time), self.window_id);
+            .send_event(RioEvent::RenderRoute(self.current_route), self.window_id);
     }
 
     #[inline]
@@ -644,10 +641,6 @@ impl<T: EventListener + Clone + std::marker::Send + 'static> ContextManager<T> {
     }
 
     pub fn update_titles(&mut self) {
-        if !self.config.should_update_titles {
-            return;
-        }
-
         let interval_time = Duration::from_secs(2);
         if self
             .titles
@@ -656,64 +649,27 @@ impl<T: EventListener + Clone + std::marker::Send + 'static> ContextManager<T> {
             .unwrap_or(true)
         {
             self.titles.last_title_update = Some(Instant::now());
-            #[cfg(unix)]
-            {
-                let mut id = String::default();
-                for (i, context) in self.contexts.iter_mut().enumerate() {
-                    let program = teletypewriter::foreground_process_name(
-                        *context.current().main_fd,
-                        context.current().shell_pid,
-                    );
+            let mut id = String::default();
+            for (i, context) in self.contexts.iter_mut().enumerate() {
+                let content = update_title(&self.config.title.content, context.current());
 
-                    let path = teletypewriter::foreground_process_path(
-                        *context.current().main_fd,
-                        context.current().shell_pid,
-                    )
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_default();
+                self.event_proxy
+                    .send_event(RioEvent::Title(content.to_owned()), self.window_id);
 
-                    let terminal_title = {
-                        let terminal = context.current().terminal.lock();
-                        terminal.title.to_string()
-                    };
+                id.push_str(&format!("{}{};", i, content));
 
-                    let window_title = if terminal_title.is_empty() {
-                        program.to_owned()
-                    } else {
-                        format!("{} ({})", terminal_title, program)
-                    };
-
-                    if cfg!(target_os = "macos") {
-                        self.event_proxy.send_event(
-                            RioEvent::TitleWithSubtitle(window_title, path.clone()),
-                            self.window_id,
-                        );
-                    } else {
-                        self.event_proxy
-                            .send_event(RioEvent::Title(window_title), self.window_id);
-                    }
-
-                    id.push_str(&format!("{}{}{};", i, program, terminal_title));
-                    self.titles.set_key_val(i, program, terminal_title, path);
-                }
-                self.titles.set_key(id);
-            }
-
-            #[cfg(not(unix))]
-            {
-                let mut id = String::from("");
-                for (i, _context) in self.contexts.iter().enumerate() {
-                    let program = self.config.shell.program.to_owned();
-                    id.push_str(&format!("{}{}{};", i, program, String::default()));
+                if self.config.should_update_title_extra {
                     self.titles.set_key_val(
                         i,
-                        program,
-                        String::default(),
-                        String::default(),
+                        content,
+                        create_title_extra_from_context(context.current()),
                     );
+                } else {
+                    self.titles.set_key_val(i, content, None);
                 }
-                self.titles.set_key(id);
             }
+
+            self.titles.set_key(id);
         }
     }
 
@@ -839,6 +795,32 @@ impl<T: EventListener + Clone + std::marker::Send + 'static> ContextManager<T> {
         self.current_route = self.current().route_id;
     }
 
+    #[inline]
+    pub fn move_current_to_prev(&mut self) {
+        let len = self.contexts.len();
+        if len <= 1 {
+            return;
+        }
+
+        let current = self.current_index;
+        let target_index = if current == 0 { len - 1 } else { current - 1 };
+        self.contexts.swap(current, target_index);
+        self.select_tab(target_index);
+    }
+
+    #[inline]
+    pub fn move_current_to_next(&mut self) {
+        let len = self.contexts.len();
+        if len <= 1 {
+            return;
+        }
+
+        let current = self.current_index;
+        let target_index = if current == len - 1 { 0 } else { current + 1 };
+        self.contexts.swap(current, target_index);
+        self.select_tab(target_index);
+    }
+
     pub fn split(&mut self, rich_text_id: usize, split_down: bool) {
         let mut working_dir = self.config.working_dir.clone();
         if self.config.use_current_path {
@@ -919,9 +901,9 @@ impl<T: EventListener + Clone + std::marker::Send + 'static> ContextManager<T> {
             is_native: config.navigation.is_native(),
             // When navigation is collapsed and does not contain any color rule
             // does not make sense fetch for foreground process names
-            should_update_titles: !(config.navigation.is_collapsed_mode()
-                && config.navigation.color_automation.is_empty()),
+            should_update_title_extra: !config.navigation.color_automation.is_empty(),
             split_color: config.colors.split,
+            title: config.title,
         };
 
         self.acc_current_route += 1;
@@ -1243,5 +1225,91 @@ pub mod test {
         assert_eq!(context_manager.current_index, 0);
         context_manager.switch_to_next();
         assert_eq!(context_manager.current_index, 1);
+    }
+
+    #[test]
+    fn test_move_current_to_next() {
+        let window_id = WindowId::from(0);
+
+        let mut context_manager =
+            ContextManager::start_with_capacity(5, VoidListener {}, window_id).unwrap();
+        let should_redirect = false;
+
+        context_manager.current_mut().rich_text_id = 1;
+        context_manager.add_context(should_redirect, 0);
+        context_manager.add_context(should_redirect, 0);
+        context_manager.add_context(should_redirect, 0);
+        context_manager.add_context(should_redirect, 0);
+
+        assert_eq!(context_manager.len(), 5);
+        assert_eq!(context_manager.current_index, 0);
+        assert_eq!(context_manager.current().rich_text_id, 1);
+
+        context_manager.move_current_to_next();
+        assert_eq!(context_manager.current_index, 1);
+        assert_eq!(context_manager.current().rich_text_id, 1);
+
+        context_manager.move_current_to_next();
+        assert_eq!(context_manager.current_index, 2);
+        assert_eq!(context_manager.current().rich_text_id, 1);
+
+        context_manager.move_current_to_next();
+        assert_eq!(context_manager.current_index, 3);
+        assert_eq!(context_manager.current().rich_text_id, 1);
+
+        context_manager.move_current_to_next();
+        assert_eq!(context_manager.current_index, 4);
+        assert_eq!(context_manager.current().rich_text_id, 1);
+
+        context_manager.move_current_to_next();
+        assert_eq!(context_manager.current_index, 0);
+        assert_eq!(context_manager.current().rich_text_id, 1);
+
+        context_manager.move_current_to_next();
+        assert_eq!(context_manager.current_index, 1);
+        assert_eq!(context_manager.current().rich_text_id, 1);
+    }
+
+    #[test]
+    fn test_move_current_to_prev() {
+        let window_id = WindowId::from(0);
+
+        let mut context_manager =
+            ContextManager::start_with_capacity(5, VoidListener {}, window_id).unwrap();
+        let should_redirect = false;
+
+        context_manager.current_mut().rich_text_id = 1;
+        context_manager.add_context(should_redirect, 0);
+        context_manager.add_context(should_redirect, 0);
+        context_manager.add_context(should_redirect, 0);
+        context_manager.add_context(should_redirect, 0);
+
+        assert_eq!(context_manager.len(), 5);
+        assert_eq!(context_manager.current_index, 0);
+        assert_eq!(context_manager.current().rich_text_id, 1);
+
+        context_manager.move_current_to_prev();
+        assert_eq!(context_manager.current_index, 4);
+        assert_eq!(context_manager.current().rich_text_id, 1);
+
+        context_manager.move_current_to_prev();
+        assert_eq!(context_manager.current_index, 3);
+        assert_eq!(context_manager.current().rich_text_id, 1);
+
+        context_manager.move_current_to_prev();
+        assert_eq!(context_manager.current_index, 2);
+        assert_eq!(context_manager.current().rich_text_id, 1);
+
+        context_manager.move_current_to_prev();
+        assert_eq!(context_manager.current_index, 1);
+        assert_eq!(context_manager.current().rich_text_id, 1);
+
+        context_manager.move_current_to_prev();
+        assert_eq!(context_manager.current_index, 0);
+        assert_eq!(context_manager.current().rich_text_id, 1);
+
+        context_manager.move_current_to_prev();
+        assert_eq!(context_manager.current_index, 4);
+        assert_eq!(context_manager.current().rich_text_id, 1);
     }
 }

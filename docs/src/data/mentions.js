@@ -3,6 +3,26 @@
 /** @satisfies {import('@site/src/components/MentionsSection/index').MentionCardProps[]} */
 const MENTIONS = [
   {
+    url: 'https://x.com/charmcli/status/1861865055370756430',
+    username: 'charmcli',
+    source: '/rio/assets/mentions/charm.jpg',
+    quote: (
+      <>
+        🌈 Rio is one of those rare software projects that delivers S+ performance while maintaining fun and playfulness at its core.
+      </>
+    ),
+  },
+  {
+    url: 'https://x.com/GoReleaser/status/1861895213091795002',
+    username: 'GoReleaser',
+    source: '/rio/assets/mentions/goreleaser.jpg',
+    quote: (
+      <>
+        Rio is pretty amazing! Excellent work by @raphamorims ✌️
+      </>
+    ),
+  },
+  {
     url: 'https://fosstodon.org/@orhun/113375636616878019',
     username: 'Orhun Parmaksız',
     source: '/rio/assets/mentions/orhun.png',
@@ -43,6 +63,16 @@ const MENTIONS = [
     ),
   },
   {
+    url: 'https://x.com/nahuakang/status/1861156311410311305',
+    username: '@nahuakang',
+    source: '/rio/assets/mentions/nahuakang.jpg',
+    quote: (
+      <>
+        I wish I had known about the #Rio terminal crafted by @raphamorims earlier. It's easy to configure and has great aesthetics out of the box. It's a software made with 💜
+      </>
+    ),
+  },
+  {
     url: 'https://twitter.com/jaijams/status/1716815864975270005',
     username: '@jaijams',
     source: '/rio/assets/mentions/jaijams.jpg',
@@ -51,16 +81,6 @@ const MENTIONS = [
         I have been using the Rio terminal (https://raphamorim.io/rio/) for 6
         months. OMG! Rio is my No.1 terminal ♥️ and is super fast 🚀 . Love
         using it daily 🎉
-      </>
-    ),
-  },
-  {
-    url: '',
-    username: 'Simon Nyberg',
-    source: '/rio/assets/mentions/simonnyberg.png',
-    quote: (
-      <>
-        Rio has become my standard terminal emulator for some time and it works well in professional use. Raphael is doing a great work and is awesome at listening to feedback to the community for new and improved features.
       </>
     ),
   },
@@ -109,6 +129,16 @@ const MENTIONS = [
       <>
         Eu comecei a usar o Rio term faz uns dias e ta sendo uma experiência
         muito bacana! parabéns @raphamorims
+      </>
+    ),
+  },
+  {
+    url: '#',
+    username: 'Simon Nyberg',
+    source: '/rio/assets/mentions/simonnyberg.png',
+    quote: (
+      <>
+        Rio has become my standard terminal emulator for some time and it works well in professional use. Raphael is doing a great work and is awesome at listening to feedback to the community for new and improved features.
       </>
     ),
   },
