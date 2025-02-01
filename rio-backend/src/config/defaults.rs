@@ -74,7 +74,7 @@ pub fn default_opacity() -> f32 {
 
 #[inline]
 pub fn default_option_as_alt() -> String {
-    String::from("None")
+    String::from("none")
 }
 
 #[inline]

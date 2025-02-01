@@ -1,11 +1,16 @@
-use crate::config::colors::{ColorArray, ColorBuilder, ColorRgb, Format};
-use std::ops::{Index, IndexMut};
-
-use crate::config::colors::defaults;
 use crate::config::colors::NamedColor;
+use crate::config::colors::{ColorArray, ColorBuilder, ColorRgb, Format};
+use crate::config::Colors;
+use std::ops::{Index, IndexMut};
 
 /// Number of terminal colors.
 pub const COUNT: usize = 269;
+
+/// Factor for automatic computation of dim colors.
+pub const DIM_FACTOR: f32 = 0.66;
+
+/// Factor for automatic computation of light colors.
+pub const LIGHT_FACTOR: f32 = 1.12;
 
 /// > The 256 color table and its partitioning
 ///
@@ -80,12 +85,12 @@ impl IndexMut<NamedColor> for TermColors {
 #[derive(Copy, Debug, Clone)]
 pub struct List([ColorArray; COUNT]);
 
-impl From<&TermColors> for List {
-    fn from(_colors: &TermColors) -> List {
+impl From<&Colors> for List {
+    fn from(colors: &Colors) -> List {
         // Type inference fails without this annotation.
         let mut list = List([ColorArray::default(); COUNT]);
 
-        list.fill_named();
+        list.fill_named(colors);
         list.fill_cube();
         list.fill_gray_ramp();
 
@@ -94,35 +99,147 @@ impl From<&TermColors> for List {
 }
 
 impl List {
-    pub fn fill_named(&mut self) {
-        self[NamedColor::Black] = defaults::black();
-        self[NamedColor::Red] = defaults::red();
-        self[NamedColor::Green] = defaults::green();
-        self[NamedColor::Yellow] = defaults::yellow();
-        self[NamedColor::Blue] = defaults::blue();
-        self[NamedColor::Magenta] = defaults::magenta();
-        self[NamedColor::Cyan] = defaults::cyan();
-        self[NamedColor::White] = defaults::white();
-        self[NamedColor::LightBlack] = defaults::light_black();
-        self[NamedColor::LightRed] = defaults::light_red();
-        self[NamedColor::LightGreen] = defaults::light_green();
-        self[NamedColor::LightYellow] = defaults::light_yellow();
-        self[NamedColor::LightBlue] = defaults::light_blue();
-        self[NamedColor::LightMagenta] = defaults::light_magenta();
-        self[NamedColor::LightCyan] = defaults::light_cyan();
-        self[NamedColor::LightWhite] = defaults::light_white();
-        self[NamedColor::LightForeground] = defaults::light_foreground();
-        self[NamedColor::Foreground] = defaults::foreground();
-        self[NamedColor::Background] = defaults::background().0;
-        self[NamedColor::DimForeground] = defaults::dim_foreground();
-        self[NamedColor::DimBlack] = defaults::dim_black();
-        self[NamedColor::DimRed] = defaults::dim_red();
-        self[NamedColor::DimGreen] = defaults::dim_green();
-        self[NamedColor::DimYellow] = defaults::dim_yellow();
-        self[NamedColor::DimBlue] = defaults::dim_blue();
-        self[NamedColor::DimMagenta] = defaults::dim_magenta();
-        self[NamedColor::DimCyan] = defaults::dim_cyan();
-        self[NamedColor::DimWhite] = defaults::dim_white();
+    pub fn fill_named(&mut self, colors: &Colors) {
+        self[NamedColor::Black] = colors.black;
+        self[NamedColor::Red] = colors.red;
+        self[NamedColor::Green] = colors.green;
+        self[NamedColor::Yellow] = colors.yellow;
+        self[NamedColor::Blue] = colors.blue;
+        self[NamedColor::Magenta] = colors.magenta;
+        self[NamedColor::Cyan] = colors.cyan;
+        self[NamedColor::White] = colors.white;
+
+        // Lights.
+        if let Some(light_black) = colors.light_black {
+            self[NamedColor::LightBlack] = light_black;
+        } else {
+            self[NamedColor::LightBlack] =
+                (ColorRgb::from_color_arr(colors.black) * LIGHT_FACTOR).to_arr();
+        }
+
+        if let Some(light_red) = colors.light_red {
+            self[NamedColor::LightRed] = light_red;
+        } else {
+            self[NamedColor::LightRed] =
+                (ColorRgb::from_color_arr(colors.red) * LIGHT_FACTOR).to_arr();
+        }
+
+        if let Some(light_green) = colors.light_green {
+            self[NamedColor::LightGreen] = light_green;
+        } else {
+            self[NamedColor::LightGreen] =
+                (ColorRgb::from_color_arr(colors.green) * LIGHT_FACTOR).to_arr();
+        }
+
+        if let Some(color) = colors.light_yellow {
+            self[NamedColor::LightYellow] = color;
+        } else {
+            self[NamedColor::LightYellow] =
+                (ColorRgb::from_color_arr(colors.yellow) * LIGHT_FACTOR).to_arr();
+        }
+
+        if let Some(color) = colors.light_blue {
+            self[NamedColor::LightBlue] = color;
+        } else {
+            self[NamedColor::LightBlue] =
+                (ColorRgb::from_color_arr(colors.blue) * LIGHT_FACTOR).to_arr();
+        }
+
+        if let Some(color) = colors.light_magenta {
+            self[NamedColor::LightMagenta] = color;
+        } else {
+            self[NamedColor::LightMagenta] =
+                (ColorRgb::from_color_arr(colors.magenta) * LIGHT_FACTOR).to_arr();
+        }
+
+        if let Some(color) = colors.light_cyan {
+            self[NamedColor::LightCyan] = color;
+        } else {
+            self[NamedColor::LightCyan] =
+                (ColorRgb::from_color_arr(colors.cyan) * LIGHT_FACTOR).to_arr();
+        }
+
+        if let Some(color) = colors.light_white {
+            self[NamedColor::LightWhite] = color;
+        } else {
+            self[NamedColor::LightWhite] =
+                (ColorRgb::from_color_arr(colors.white) * LIGHT_FACTOR).to_arr();
+        }
+
+        if let Some(color) = colors.light_foreground {
+            self[NamedColor::LightForeground] = color;
+        } else {
+            self[NamedColor::LightForeground] =
+                (ColorRgb::from_color_arr(colors.foreground) * LIGHT_FACTOR).to_arr();
+        }
+
+        // Foreground and background.
+        self[NamedColor::Foreground] = colors.foreground;
+        self[NamedColor::Background] = colors.background.0;
+
+        // Dims.
+        if let Some(color) = colors.dim_foreground {
+            self[NamedColor::DimForeground] = color;
+        } else {
+            self[NamedColor::DimForeground] =
+                (ColorRgb::from_color_arr(colors.foreground) * DIM_FACTOR).to_arr();
+        }
+
+        if let Some(color) = colors.dim_black {
+            self[NamedColor::DimBlack] = color;
+        } else {
+            self[NamedColor::DimBlack] =
+                (ColorRgb::from_color_arr(colors.black) * DIM_FACTOR).to_arr();
+        }
+
+        if let Some(color) = colors.dim_red {
+            self[NamedColor::DimRed] = color;
+        } else {
+            self[NamedColor::DimRed] =
+                (ColorRgb::from_color_arr(colors.red) * DIM_FACTOR).to_arr();
+        }
+
+        if let Some(color) = colors.dim_green {
+            self[NamedColor::DimGreen] = color;
+        } else {
+            self[NamedColor::DimGreen] =
+                (ColorRgb::from_color_arr(colors.green) * DIM_FACTOR).to_arr();
+        }
+
+        if let Some(color) = colors.dim_yellow {
+            self[NamedColor::DimYellow] = color;
+        } else {
+            self[NamedColor::DimYellow] =
+                (ColorRgb::from_color_arr(colors.yellow) * DIM_FACTOR).to_arr();
+        }
+
+        if let Some(color) = colors.dim_blue {
+            self[NamedColor::DimBlue] = color;
+        } else {
+            self[NamedColor::DimBlue] =
+                (ColorRgb::from_color_arr(colors.blue) * DIM_FACTOR).to_arr();
+        }
+
+        if let Some(color) = colors.dim_magenta {
+            self[NamedColor::DimMagenta] = color;
+        } else {
+            self[NamedColor::DimMagenta] =
+                (ColorRgb::from_color_arr(colors.magenta) * DIM_FACTOR).to_arr();
+        }
+
+        if let Some(color) = colors.dim_cyan {
+            self[NamedColor::DimCyan] = color;
+        } else {
+            self[NamedColor::DimCyan] =
+                (ColorRgb::from_color_arr(colors.cyan) * DIM_FACTOR).to_arr();
+        }
+
+        if let Some(color) = colors.dim_white {
+            self[NamedColor::DimWhite] = color;
+        } else {
+            self[NamedColor::DimWhite] =
+                (ColorRgb::from_color_arr(colors.white) * DIM_FACTOR).to_arr();
+        }
     }
 
     pub fn fill_cube(&mut self) {

@@ -599,7 +599,14 @@ impl Screen<'_> {
             return;
         }
 
-        let build_key_sequence = Self::should_build_sequence(&key, text, mode, mods);
+        // Mask `Alt` modifier from input when we won't send esc.
+        let mods = if self.alt_send_esc(key, text) {
+            mods
+        } else {
+            mods & !ModifiersState::ALT
+        };
+
+        let build_key_sequence = Self::should_build_sequence(key, text, mode, mods);
 
         let bytes = if build_key_sequence {
             crate::bindings::kitty_keyboard::build_key_sequence(key, mods, mode)

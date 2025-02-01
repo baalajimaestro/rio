@@ -157,6 +157,8 @@ pub struct Config {
     pub hide_cursor_when_typing: bool,
     #[serde(default = "Renderer::default")]
     pub renderer: Renderer,
+    #[serde(default = "bool::default", rename = "draw-bold-text-with-light-colors")]
+    pub draw_bold_text_with_light_colors: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -504,6 +506,7 @@ impl Default for Config {
             ignore_selection_fg_color: false,
             confirm_before_quit: true,
             hide_cursor_when_typing: false,
+            draw_bold_text_with_light_colors: false,
         }
     }
 }
@@ -950,24 +953,6 @@ mod tests {
         assert_eq!(result.colors.tabs, hex_to_color_arr("#030303"));
         assert_eq!(result.colors.white, hex_to_color_arr("#000000"));
         assert_eq!(result.colors.yellow, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.dim_black, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.dim_blue, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.dim_cyan, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.dim_foreground, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.dim_green, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.dim_magenta, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.dim_red, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.dim_white, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.dim_yellow, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.light_black, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.light_blue, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.light_cyan, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.light_foreground, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.light_green, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.light_magenta, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.light_red, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.light_white, hex_to_color_arr("#030303"));
-        assert_eq!(result.colors.light_yellow, hex_to_color_arr("#030303"));
         assert_eq!(
             result.colors.selection_background,
             hex_to_color_arr("#111111")

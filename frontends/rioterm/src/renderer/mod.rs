@@ -11,7 +11,7 @@ use crate::crosswords::square::{Flags, Square};
 use crate::screen::hint::HintMatches;
 use navigation::ScreenNavigation;
 use rio_backend::config::colors::{
-    term::{List, TermColors},
+    term::{List, DIM_FACTOR},
     AnsiColor, ColorArray, Colors, NamedColor,
 };
 use rio_backend::config::Config;
@@ -28,6 +28,7 @@ use unicode_width::UnicodeWidthChar;
 
 pub struct Renderer {
     is_vi_mode_enabled: bool,
+    draw_bold_text_with_light_colors: bool,
     pub named_colors: Colors,
     pub colors: List,
     pub navigation: ScreenNavigation,
@@ -54,8 +55,7 @@ impl Renderer {
         config: &Config,
         font_context: &rio_backend::sugarloaf::font::FontLibrary,
     ) -> Renderer {
-        let term_colors = TermColors::default();
-        let colors = List::from(&term_colors);
+        let colors = List::from(&config.colors);
         let named_colors = config.colors;
 
         let mut dynamic_background =
@@ -79,6 +79,7 @@ impl Renderer {
         }
 
         Renderer {
+            draw_bold_text_with_light_colors: config.draw_bold_text_with_light_colors,
             macos_use_unified_titlebar: config.window.macos_use_unified_titlebar,
             config_blinking_interval: config.cursor.blinking_interval.clamp(350, 1200),
             option_as_alt: config.option_as_alt.to_lowercase(),
@@ -413,54 +414,28 @@ impl Renderer {
     #[inline]
     fn compute_color(&self, color: &AnsiColor, flags: Flags) -> ColorArray {
         match color {
-            AnsiColor::Named(ansi_name) => match (ansi_name, flags) {
-                (NamedColor::Background, _) => self.named_colors.background.0,
-                (NamedColor::Cursor, _) => self.named_colors.cursor,
-
-                (NamedColor::Black, Flags::DIM) => self.named_colors.dim_black,
-                (NamedColor::Black, Flags::BOLD) => self.named_colors.light_black,
-                (NamedColor::Black, _) => self.named_colors.black,
-                (NamedColor::Blue, Flags::DIM) => self.named_colors.dim_blue,
-                (NamedColor::Blue, Flags::BOLD) => self.named_colors.light_blue,
-                (NamedColor::Blue, _) => self.named_colors.blue,
-                (NamedColor::Cyan, Flags::DIM) => self.named_colors.dim_cyan,
-                (NamedColor::Cyan, Flags::BOLD) => self.named_colors.light_cyan,
-                (NamedColor::Cyan, _) => self.named_colors.cyan,
-                (NamedColor::Foreground, _) => self.named_colors.foreground,
-                (NamedColor::Green, Flags::DIM) => self.named_colors.dim_green,
-                (NamedColor::Green, Flags::BOLD) => self.named_colors.light_green,
-                (NamedColor::Green, _) => self.named_colors.green,
-                (NamedColor::Magenta, Flags::DIM) => self.named_colors.dim_magenta,
-                (NamedColor::Magenta, Flags::BOLD) => self.named_colors.light_magenta,
-                (NamedColor::Magenta, _) => self.named_colors.magenta,
-                (NamedColor::Red, Flags::DIM) => self.named_colors.dim_red,
-                (NamedColor::Red, Flags::BOLD) => self.named_colors.light_red,
-                (NamedColor::Red, _) => self.named_colors.red,
-                (NamedColor::White, Flags::DIM) => self.named_colors.dim_white,
-                (NamedColor::White, Flags::BOLD) => self.named_colors.light_white,
-                (NamedColor::White, _) => self.named_colors.white,
-                (NamedColor::Yellow, Flags::DIM) => self.named_colors.dim_yellow,
-                (NamedColor::Yellow, Flags::BOLD) => self.named_colors.light_yellow,
-                (NamedColor::Yellow, _) => self.named_colors.yellow,
-                (NamedColor::LightBlack, _) => self.named_colors.light_black,
-                (NamedColor::LightBlue, _) => self.named_colors.light_blue,
-                (NamedColor::LightCyan, _) => self.named_colors.light_cyan,
-                (NamedColor::LightForeground, _) => self.named_colors.light_foreground,
-                (NamedColor::LightGreen, _) => self.named_colors.light_green,
-                (NamedColor::LightMagenta, _) => self.named_colors.light_magenta,
-                (NamedColor::LightRed, _) => self.named_colors.light_red,
-                (NamedColor::LightWhite, _) => self.named_colors.light_white,
-                (NamedColor::LightYellow, _) => self.named_colors.light_yellow,
-                (NamedColor::DimBlack, _) => self.named_colors.dim_black,
-                (NamedColor::DimBlue, _) => self.named_colors.dim_blue,
-                (NamedColor::DimCyan, _) => self.named_colors.dim_cyan,
-                (NamedColor::DimForeground, _) => self.named_colors.dim_foreground,
-                (NamedColor::DimGreen, _) => self.named_colors.dim_green,
-                (NamedColor::DimMagenta, _) => self.named_colors.dim_magenta,
-                (NamedColor::DimRed, _) => self.named_colors.dim_red,
-                (NamedColor::DimWhite, _) => self.named_colors.dim_white,
-                (NamedColor::DimYellow, _) => self.named_colors.dim_yellow,
-            },
+            AnsiColor::Named(ansi) => {
+                match (
+                    self.draw_bold_text_with_light_colors,
+                    flags & Flags::DIM_BOLD,
+                ) {
+                    // If no bright foreground is set, treat it like the BOLD flag doesn't exist.
+                    (_, Flags::DIM_BOLD)
+                        if ansi == &NamedColor::Foreground
+                            && self.named_colors.light_foreground.is_none() =>
+                    {
+                        self.colors[NamedColor::DimForeground as usize]
+                    }
+                    // Draw bold text in bright colors *and* contains bold flag.
+                    (true, Flags::BOLD) => self.colors[ansi.to_light() as usize],
+                    // Cell is marked as dim and not bold.
+                    (_, Flags::DIM) | (false, Flags::DIM_BOLD) => {
+                        self.colors[ansi.to_dim() as usize]
+                    }
+                    // None of the above, keep original color..
+                    _ => self.colors[*ansi as usize],
+                }
+            }
             AnsiColor::Spec(rgb) => {
                 if !flags.contains(Flags::DIM) {
                     rgb.to_arr()
@@ -485,56 +460,27 @@ impl Renderer {
     #[inline]
     fn compute_bg_color(&self, square: &Square) -> ColorArray {
         match square.bg {
-            AnsiColor::Named(ansi_name) => match (ansi_name, square.flags) {
-                (NamedColor::Background, _) => self.named_colors.background.0,
-                (NamedColor::Cursor, _) => self.named_colors.cursor,
-
-                (NamedColor::Black, Flags::DIM) => self.named_colors.dim_black,
-                (NamedColor::Black, Flags::BOLD) => self.named_colors.light_black,
-                (NamedColor::Black, _) => self.named_colors.black,
-                (NamedColor::Blue, Flags::DIM) => self.named_colors.dim_blue,
-                (NamedColor::Blue, Flags::BOLD) => self.named_colors.light_blue,
-                (NamedColor::Blue, _) => self.named_colors.blue,
-                (NamedColor::Cyan, Flags::DIM) => self.named_colors.dim_cyan,
-                (NamedColor::Cyan, Flags::BOLD) => self.named_colors.light_cyan,
-                (NamedColor::Cyan, _) => self.named_colors.cyan,
-                (NamedColor::Foreground, _) => self.named_colors.foreground,
-                (NamedColor::Green, Flags::DIM) => self.named_colors.dim_green,
-                (NamedColor::Green, Flags::BOLD) => self.named_colors.light_green,
-                (NamedColor::Green, _) => self.named_colors.green,
-                (NamedColor::Magenta, Flags::DIM) => self.named_colors.dim_magenta,
-                (NamedColor::Magenta, Flags::BOLD) => self.named_colors.light_magenta,
-                (NamedColor::Magenta, _) => self.named_colors.magenta,
-                (NamedColor::Red, Flags::DIM) => self.named_colors.dim_red,
-                (NamedColor::Red, Flags::BOLD) => self.named_colors.light_red,
-                (NamedColor::Red, _) => self.named_colors.red,
-                (NamedColor::White, Flags::DIM) => self.named_colors.dim_white,
-                (NamedColor::White, Flags::BOLD) => self.named_colors.light_white,
-                (NamedColor::White, _) => self.named_colors.white,
-                (NamedColor::Yellow, Flags::DIM) => self.named_colors.dim_yellow,
-                (NamedColor::Yellow, Flags::BOLD) => self.named_colors.light_yellow,
-                (NamedColor::Yellow, _) => self.named_colors.yellow,
-                (NamedColor::LightBlack, _) => self.named_colors.light_black,
-                (NamedColor::LightBlue, _) => self.named_colors.light_blue,
-                (NamedColor::LightCyan, _) => self.named_colors.light_cyan,
-                (NamedColor::LightForeground, _) => self.named_colors.light_foreground,
-                (NamedColor::LightGreen, _) => self.named_colors.light_green,
-                (NamedColor::LightMagenta, _) => self.named_colors.light_magenta,
-                (NamedColor::LightRed, _) => self.named_colors.light_red,
-                (NamedColor::LightWhite, _) => self.named_colors.light_white,
-                (NamedColor::LightYellow, _) => self.named_colors.light_yellow,
-                (NamedColor::DimBlack, _) => self.named_colors.dim_black,
-                (NamedColor::DimBlue, _) => self.named_colors.dim_blue,
-                (NamedColor::DimCyan, _) => self.named_colors.dim_cyan,
-                (NamedColor::DimForeground, _) => self.named_colors.dim_foreground,
-                (NamedColor::DimGreen, _) => self.named_colors.dim_green,
-                (NamedColor::DimMagenta, _) => self.named_colors.dim_magenta,
-                (NamedColor::DimRed, _) => self.named_colors.dim_red,
-                (NamedColor::DimWhite, _) => self.named_colors.dim_white,
-                (NamedColor::DimYellow, _) => self.named_colors.dim_yellow,
+            AnsiColor::Named(ansi) => self.colors[ansi as usize],
+            AnsiColor::Spec(rgb) => match square.flags & Flags::DIM {
+                Flags::DIM => (&(rgb * DIM_FACTOR)).into(),
+                _ => (&rgb).into(),
             },
-            AnsiColor::Spec(rgb) => rgb.to_arr(),
-            AnsiColor::Indexed(idx) => self.colors[idx as usize],
+            AnsiColor::Indexed(idx) => {
+                let idx = match (
+                    self.draw_bold_text_with_light_colors,
+                    square.flags & Flags::DIM_BOLD,
+                    idx,
+                ) {
+                    (true, Flags::BOLD, 0..=7) => idx as usize + 8,
+                    (false, Flags::DIM, 8..=15) => idx as usize - 8,
+                    (false, Flags::DIM, 0..=7) => {
+                        NamedColor::DimBlack as usize + idx as usize
+                    }
+                    _ => idx as usize,
+                };
+
+                self.colors[idx]
+            }
         }
     }
 

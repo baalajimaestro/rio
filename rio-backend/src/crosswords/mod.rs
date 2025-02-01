@@ -34,11 +34,8 @@ use crate::ansi::{
     KeyboardModesApplyBehavior, LineClearMode, TabulationClearMode,
 };
 use crate::clipboard::ClipboardType;
-use crate::config::colors::{
-    self,
-    term::{List, TermColors},
-    AnsiColor, ColorRgb,
-};
+use crate::config::colors::{self, term::List, AnsiColor, ColorRgb};
+use crate::crosswords::colors::Colors;
 use crate::crosswords::grid::{BidirectionalIterator, Dimensions, Grid, Scroll};
 use crate::event::WindowId;
 use crate::event::{EventListener, RioEvent};
@@ -431,8 +428,8 @@ impl<U: EventListener> Crosswords<U> {
 
         let scroll_region = Line(0)..Line(rows as i32);
         let semantic_escape_chars = String::from(",│`|:\"' ()[]{}<>\t");
-        let term_colors = TermColors::default();
-        let colors = List::from(&term_colors);
+        // let term_colors = TermColors::default();
+        let colors = List::from(&Colors::default());
         // Regex used for the default URL hint.
         let url_regex: &str = "(ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|https://|http://|news:|file:|git://|ssh:|ftp://)\
                          [^\u{0000}-\u{001F}\u{007F}-\u{009F}<>\"\\s{-}\\^⟨⟩`]+";
